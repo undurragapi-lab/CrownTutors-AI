@@ -7,7 +7,7 @@ _st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Estilos CSS para el diseño flotante, inmersivo y tipo app nativa
+# Estilos CSS limpios para el contenedor tipo app móvil y modo oscuro
 _st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -20,164 +20,97 @@ _st.markdown("""
     }
     
     /* Contenedor principal estilo pantalla de celular */
-    .mobile-screen {
-        position: relative;
-        width: 100%;
+    .mobile-wrapper {
         max-width: 420px;
-        height: 680px;
         margin: auto;
-        border-radius: 32px;
+        border-radius: 28px;
         overflow: hidden;
-        box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-        border: 4px solid #2a2e39;
-        background-color: #000;
-    }
-    
-    /* Capa de chat flotante sobre el video */
-    .chat-overlay {
-        position: absolute;
-        bottom: 80px;
-        left: 15px;
-        right: 15px;
-        background: rgba(10, 14, 23, 0.75);
-        backdrop-filter: blur(10px);
-        padding: 12px;
-        border-radius: 18px;
-        max-height: 180px;
-        overflow-y: auto;
-        border: 1px solid rgba(255,255,255,0.1);
-        z-index: 10;
-    }
-    
-    .chat-msg-assistant {
-        background: rgba(255, 255, 255, 0.15);
-        color: #f0f2f6;
-        padding: 8px 12px;
-        border-radius: 12px;
-        margin-bottom: 8px;
-        font-size: 13px;
-    }
-    
-    .chat-msg-user {
-        background: rgba(0, 122, 255, 0.4);
-        color: #ffffff;
-        padding: 8px 12px;
-        border-radius: 12px;
-        margin-bottom: 8px;
-        text-align: right;
-        font-size: 13px;
+        border: 3px solid #2a2e39;
+        background: #121824;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        padding: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Definición de los tutores apuntando directo al archivo en la raíz
+# Diccionario de tutores
 TUTORES = {
-    "Sofía": {"video_path": "sofia.mp4", "estilo": "Casual y Conversacional"},
-    "Sebastián": {"video_path": "sebastian.mp4", "estilo": "Corporativo y de Negocios"},
-    "Emilia": {"video_path": "emilia.mp4", "estilo": "Literatura y Lectura"},
-    "Bruno": {"video_path": "bruno.mp4", "estilo": "Nivel Avanzado y Debate"},
-    "Mateo": {"video_path": "mateo.mp4", "estilo": "Dinámico y Juvenil"},
-    "Lucas": {"video_path": "lucas.mp4", "estilo": "Marketing y Creatividad"},
-    "Martina": {"video_path": "martina.mp4", "estilo": "Rápida y Directa"},
-    "Valentina": {"video_path": "valentina.mp4", "estilo": "Gramática y Estructura"}
+    "Sofía": {"video_path": "sofia.mp4", "estilo": "Casual y Conversacional", "idioma_def": "Inglés (UK)"},
+    "Sebastián": {"video_path": "sebastian.mp4", "estilo": "Corporativo", "idioma_def": "Inglés (Business)"},
+    "Emilia": {"video_path": "emilia.mp4", "estilo": "Literatura", "idioma_def": "Francés"},
+    "Bruno": {"video_path": "bruno.mp4", "estilo": "Debate", "idioma_def": "Alemán"}
 }
 
-# Inicializar sistema de múltiples chats por idioma
-if "chats_activos" not in _st.session_state:
-    _st.session_state.chats_activos = {
-        "Inglés - Sofía": {
-            "tutor": "Sofía",
-            "idioma": "Inglés",
-            "mensajes": [{"role": "assistant", "content": "Hello! I'm Sofia. Let's practice your British English. Feel free to upload a document to discuss!"}]
-        }
-    }
+# Inicializar estado de la sesión
+if "chat_historial" not in _st.session_state:
+    _st.session_state.chat_historial = [
+        {"role": "assistant", "content": "Hello! I'm Sofia. Let's practice your British English. Feel free to upload a document or start chatting!"}
+    ]
 
-if "chat_actual" not in _st.session_state:
-    _st.session_state.chat_actual = "Inglés - Sofía"
+if "tutor_actual" not in _st.session_state:
+    _st.session_state.tutor_actual = "Sofía"
 
-if "mostrar_menu" not in _st.session_state:
-    _st.session_state.mostrar_menu = False
-
-if "archivo_cargado_texto" not in _st.session_state:
-    _st.session_state.archivo_cargado_texto = None
-
-# Botón de menú superior izquierdo (☰)
-if _st.button("☰ Menú"):
-    _st.session_state.mostrar_menu = not _st.session_state.mostrar_menu
-
-# Menú lateral dinámico
-if _st.session_state.mostrar_menu:
-    _st.sidebar.title("🛠️ Menú de Herramientas")
-    _st.sidebar.subheader("💬 Chats Multilingües")
+# --- BARRA LATERAL (MENÚ) ---
+with _st.sidebar:
+    _st.title("🛠️ Menú de Configuración")
+    _st.subheader("Selecciona tu Tutor")
     
-    lista_nombres_chats = list(_st.session_state.chats_activos.keys())
-    chat_seleccionado = _st.sidebar.selectbox("Selecciona chat activo:", lista_nombres_chats, index=lista_nombres_chats.index(_st.session_state.chat_actual))
+    tutor_seleccionado = _st.selectbox("Tutor activo:", list(TUTORES.keys()), index=list(TUTORES.keys()).index(_st.session_state.tutor_actual))
     
-    if chat_seleccionado != _st.session_state.chat_actual:
-        _st.session_state.chat_actual = chat_seleccionado
+    if tutor_seleccionado != _st.session_state.tutor_actual:
+        _st.session_state.tutor_actual = tutor_seleccionado
+        _st.session_state.chat_historial = [
+            {"role": "assistant", "content": f"Hello! I'm {tutor_seleccionado}, ready to help you practice."}
+        ]
         _st.rerun()
         
-    _st.sidebar.markdown("---")
-    _st.sidebar.subheader("➕ Crear Nuevo Chat")
-    nuevo_tutor = _st.sidebar.selectbox("Elige Tutor:", list(TUTORES.keys()))
-    nuevo_idioma = _st.sidebar.text_input("Idioma a practicar:", "Francés")
-    
-    if _st.sidebar.button("Iniciar Chat"):
-        key_chat = f"{nuevo_idioma} - {nuevo_tutor}"
-        if key_chat not in _st.session_state.chats_activos:
-            _st.session_state.chats_activos[key_chat] = {
-                "tutor": nuevo_tutor,
-                "idioma": nuevo_idioma,
-                "mensajes": [{"role": "assistant", "content": f"Hello! I'm {nuevo_tutor}, ready to practice {nuevo_idioma} with you."}]
-            }
-        _st.session_state.chat_actual = key_chat
-        _st.session_state.mostrar_menu = False
-        _st.rerun()
+    _st.markdown("---")
+    _st.subheader("📎 Documento de Contexto")
+    archivo_subido = _st.file_uploader("Sube un archivo de texto o PDF", type=["txt", "pdf"])
+    if archivo_subido:
+        _st.success(f"¡{archivo_subido.name} cargado correctamente!")
 
-# Obtener datos del chat actual
-info_chat_actual = _st.session_state.chats_activos[_st.session_state.chat_actual]
-tutor_activo = info_chat_actual["tutor"]
-idioma_activo = info_chat_actual["idioma"]
-info_tutor = TUTORES[tutor_activo]
+# Datos del tutor actual
+info_tutor = TUTORES[_st.session_state.tutor_actual]
 
-# Contenedor visual emulando la pantalla del Pixel 9
-_st.markdown('<div class="mobile-screen">', unsafe_allow_html=True)
+# --- CONTENEDOR PRINCIPAL TIPO APP MÓVIL ---
+_st.markdown('<div class="mobile-wrapper">', unsafe_allow_html=True)
 
-# 1. Reproductor de video en bucle del tutor activo
+# Encabezado visual de la app móvil
+col1, col2 = _st.columns([3, 1])
+with col1:
+    _st.markdown(f"### 🎙️ {_st.session_state.tutor_actual}")
+    _st.caption(f"Estilo: {info_tutor['estilo']}")
+with col2:
+    if _st.button("⚙️ Menú"):
+        _st.toast("Usa el menú lateral de Streamlit para cambiar de tutor.", icon="ℹ️")
+
+# Reproductor de video del tutor (Limpio y centrado)
 try:
     _st.video(info_tutor["video_path"], format="video/mp4", autoplay=True, loop=True, muted=True)
 except Exception:
-    _st.warning(f"⚠️ No se pudo cargar el video para {tutor_activo}.")
+    _st.warning("⚠️ Video de tutor no disponible temporalmente.")
 
-# 2. Capa de chat flotante transparente
-chat_html = f'<div class="chat-overlay"><small style="color:#00d2ff;">Idioma: {idioma_activo} | Tutor: {tutor_activo}</small><hr style="margin:2px 0; border-color:rgba(255,255,255,0.1);">'
-for msg in info_chat_actual["mensajes"]:
-    if msg["role"] == "assistant":
-        chat_html += f'<div class="chat-msg-assistant"><b>{tutor_activo}:</b> {msg["content"]}</div>'
-    else:
-        chat_html += f'<div class="chat-msg-user"><b>Tú:</b> {msg["content"]}</div>'
-chat_html += '</div>'
-_st.markdown(chat_html, unsafe_allow_html=True)
+_st.markdown("---")
+
+# Contenedor de mensajes de chat nativos (organizados y scrolleables)
+chat_container = _st.container(height=300)
+with chat_container:
+    for mensaje in _st.session_state.chat_historial:
+        with _st.chat_message(mensaje["role"]):
+            _st.write(mensaje["content"])
 
 _st.markdown('</div>', unsafe_allow_html=True)
 
-# 3. Panel de documentos
-with _st.expander("📎 Panel de Documentos y Contextualización"):
-    archivo_subido = _st.file_uploader("Sube un documento (TXT, PDF) para analizar con el tutor:", type=["txt", "pdf"])
-    if archivo_subido is not None:
-        texto_archivo = archivo_subido.read().decode("utf-8", errors="ignore")
-        _st.session_state.archivo_cargado_texto = texto_archivo[:3000]
-        _st.success(f"¡Documento '{archivo_subido.name}' cargado con éxito!")
+# --- ENTRADA DE CHAT NATIVA (Fácil de usar en el Pixel 9) ---
+prompt_usuario = _st.chat_input("Escribe tu mensaje aquí...")
 
-# 4. Entrada de texto inferior
-_st.write("")
-entrada_usuario = _st.text_input("", placeholder=f"Habla o escribe en {idioma_activo}...", label_visibility="collapsed")
-
-if entrada_usuario:
-    info_chat_actual["mensajes"].append({"role": "user", "content": entrada_usuario})
+if prompt_usuario:
+    # Agregar mensaje del usuario
+    _st.session_state.chat_historial.append({"role": "user", "content": prompt_usuario})
     
-    contexto_extra = " [Con documento adjunto]" if _st.session_state.archivo_cargado_texto else ""
-    respuesta_ia = f"Splendid point!{contexto_extra} Your {idioma_activo} phrasing is quite natural. Let's keep going!"
+    # Respuesta simulada de la IA (aquí conectaremos la lógica de Gemini más adelante)
+    respuesta_ia = f"Splendid! Your phrasing is natural. Let's keep practicing with {_st.session_state.tutor_actual}."
+    _st.session_state.chat_historial.append({"role": "assistant", "content": respuesta_ia})
     
-    info_chat_actual["mensajes"].append({"role": "assistant", "content": respuesta_ia})
     _st.rerun()
