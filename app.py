@@ -9,15 +9,18 @@ _st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Configurar la API de Gemini
+# Configurar la API de Gemini de forma segura
+api_key_val = ""
 try:
-    api_key_val = _st.secrets.get("GEMINI_API_KEY", "")
-    if api_key_val:
-        genai.configure(api_key=api_key_val)
+    if "GEMINI_API_KEY" in _st.secrets:
+        api_key_val = _st.secrets["GEMINI_API_KEY"]
 except Exception:
     pass
 
-# Estilos CSS avanzados y script de voz/video integrado
+if api_key_val:
+    genai.configure(api_key=api_key_val)
+
+# Estilos CSS limpios y modernos
 _st.markdown("""
     <style>
     footer {visibility: hidden;}
@@ -89,7 +92,7 @@ _st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Definición de tutores con su configuración de voz para el navegador
+# Definición de tutores
 TUTORES = {
     "Sofía": {
         "video": "sofia.mp4", 
@@ -127,9 +130,10 @@ if "ultima_respuesta" not in _st.session_state:
 with _st.sidebar:
     _st.title("🛠️ Menú de Herramientas")
     
-    api_key_input = _st.text_input("Gemini API Key:", type="password")
+    api_key_input = _st.text_input("Gemini API Key:", value=api_key_val, type="password")
     if api_key_input:
         genai.configure(api_key=api_key_input)
+        api_key_val = api_key_input
         
     _st.markdown("---")
     _st.subheader("💬 Chats Activos")
@@ -181,7 +185,7 @@ if _st.session_state.chat_actual is None or _st.session_state.tutor_activo is No
             <h2>👋 ¡Bienvenido a CrownTutors AI!</h2>
             <p style="color: #a0a8b4; font-size: 16px; margin-top: 10px;">
                 Para comenzar, abre el menú de herramientas <b>(☰)</b> en la esquina superior, 
-                selecciona un tutor e inicia tu sesión de práctica.
+                configura tu API Key, selecciona un tutor e inicia tu sesión de práctica.
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -189,15 +193,14 @@ else:
     info_tutor = TUTORES[_st.session_state.tutor_activo]
     historial_actual = _st.session_state.chats_activos[_st.session_state.chat_actual]
 
-    # Contenedor del video con JavaScript para sincronizar pausa/reproducción y voz nativa
     video_file = info_tutor["video"]
     if not os.path.exists(video_file):
         video_file = "sofia.mp4"
 
-    # HTML + JS para controlar el video y la voz del navegador en tiempo real
     texto_a_decir = _st.session_state.ultima_respuesta
     lang_voz = info_tutor["voice_lang"]
 
+    # Reproductor de video con sincronización de voz y pausa/reproducción
     video_html = f"""
     <div class="fullscreen-video-container">
         <video id="avatarVideo" src="{video_file}" playsinline muted></video>
@@ -209,18 +212,14 @@ else:
 
         function playAvatarSpeech() {{
             if (!textToSpeak) return;
-            
-            // Sintetizador de voz nativo del navegador
             const synth = window.speechSynthesis;
             const utterThis = new SpeechSynthesisUtterance(textToSpeak);
             utterThis.lang = voiceLang;
             
-            // Cuando empiece a hablar, reproduce el video (gesticulando)
             utterThis.onstart = function() {{
                 video.play();
             }};
             
-            // Cuando termine de hablar, pausa el video
             utterThis.onend = function() {{
                 video.pause();
             }};
@@ -230,15 +229,14 @@ else:
             }};
 
             synth.speak(utterThis);
-        }}
+        }
 
-        // Ejecutar al cargar la respuesta
         window.onload = playAvatarSpeech();
     </script>
     """
     _st.markdown(video_html, unsafe_allow_html=True)
 
-    # Historial de mensajes flotante sin cajas
+    # Capa de chat flotante transparente
     _st.markdown('<div class="chat-overlay">', unsafe_allow_html=True)
     for mensaje in historial_actual:
         rol = mensaje["role"]
@@ -249,7 +247,7 @@ else:
             _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
     _st.markdown('</div>', unsafe_allow_html=True)
 
-    # Barra de escritura inferior estilo Gemini
+    # Barra de mensajes inferior estilo Gemini
     with _st.form(key="gemini_input_form", clear_on_submit=True):
         col_plus, col_input, col_send = _st.columns([1, 8, 1])
         
@@ -260,25 +258,24 @@ else:
         with col_send:
             btn_enviar = _st.form_submit_button("➤")
 
-    # Procesar lógica de Gemini y actualizar la última respuesta para que hable y mueva la boca
+    # Lógica de respuesta con modelo estable de Gemini (`gemini-1.5-flash`)
     if btn_enviar and prompt_usuario:
         historial_actual.append({"role": "user", "content": prompt_usuario})
         
-        with _st.spinner("Pensando respuesta..."):
-            try:
-                model = genai.GenerativeModel('gemini-2.5-flash')
-                contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
-                prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
-                
-                response = model.generate_content(prompt_completo)
-                respuesta_ia = response.text
-            except Exception as e:
+        if not api_key_val:
+            respuesta_ia = "⚠️ Error: Por favor ingresa tu API Key de Gemini en el menú de herramientas (☰)."
+        else:
+            with _st.spinner("Pensando respuesta..."):
                 try:
-                    model = genai.GenerativeModel('gemini-2.0-flash')
+                    # Usamos gemini-1.5-flash que es el modelo estándar y compatible en la nube
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
+                    prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
+                    
                     response = model.generate_content(prompt_completo)
                     respuesta_ia = response.text
-                except Exception as e2:
-                    respuesta_ia = f"⚠️ Error de conexión con Gemini. Detalle: {e2}"
+                except Exception as e:
+                    respuesta_ia = f"⚠️ Error con Gemini: {str(e)}"
                 
         historial_actual.append({"role": "assistant", "content": respuesta_ia})
         _st.session_state.ultima_respuesta = respuesta_ia
