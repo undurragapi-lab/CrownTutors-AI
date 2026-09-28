@@ -6,7 +6,7 @@ import os
 _st.set_page_config(
     page_title="CrownTutors AI",
     layout="centered",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Configurar la API de Gemini de forma segura
@@ -20,18 +20,16 @@ except Exception:
 if api_key_val:
     genai.configure(api_key=api_key_val)
 
-# Estilos CSS avanzados
+# Estilos CSS avanzados para Full Screen real y barra de chat fija abajo
 _st.markdown("""
     <style>
-    header {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
-    .stDeployButton {display:none !important;}
+    /* Ocultar elementos de Streamlit para pantalla completa absoluta */
+    header {visibility: hidden !important; display: none !important;}
+    footer {visibility: hidden !important; display: none !important;}
+    .stDeployButton {display: none !important;}
     
     .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding: 0px !important;
         max-width: 100% !important;
         height: 100vh !important;
         overflow: hidden !important;
@@ -42,7 +40,8 @@ _st.markdown("""
         color: #ffffff;
     }
     
-    .fullscreen-video-container {
+    /* Contenedor del video ocupando toda la pantalla de fondo */
+    .video-background {
         position: fixed;
         top: 0;
         left: 0;
@@ -51,17 +50,9 @@ _st.markdown("""
         z-index: 0;
         overflow: hidden;
         background: #000;
-        display: flex;
-        justify-content: center;
-        align-items: center;
     }
     
-    .fullscreen-video-container video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    
+    /* Capa de chat flotante translúcida */
     .chat-overlay {
         position: absolute;
         bottom: 80px;
@@ -98,6 +89,20 @@ _st.markdown("""
         height: 90vh;
         text-align: center;
         padding: 20px;
+    }
+    
+    /* Fijar la barra de inputs perfectamente abajo */
+    div[data-testid="stForm"] {
+        position: fixed !important;
+        bottom: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        z-index: 999 !important;
+        background: rgba(20, 20, 20, 0.85) !important;
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 6px 10px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -136,7 +141,7 @@ if "texto_documento" not in _st.session_state:
 if "ultima_respuesta" not in _st.session_state:
     _st.session_state.ultima_respuesta = ""
 
-# Menú lateral de herramientas
+# Menú lateral de herramientas (☰)
 with _st.sidebar:
     _st.title("🛠️ Menú de Herramientas")
     
@@ -194,7 +199,8 @@ if _st.session_state.chat_actual is None or _st.session_state.tutor_activo is No
         <div class="welcome-screen">
             <h2>👋 ¡Bienvenido a CrownTutors AI!</h2>
             <p style="color: #a0a8b4; font-size: 16px; margin-top: 10px;">
-                Despliega el menú lateral para configurar tu API Key, seleccionar un tutor e iniciar tu sesión.
+                Para comenzar, abre el menú de herramientas <b>(☰)</b> en la esquina superior, 
+                configura tu API Key, selecciona un tutor e inicia tu sesión de práctica.
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -205,43 +211,28 @@ else:
     video_file = info_tutor["video"]
     
     if os.path.exists(video_file):
+        # Reproductor de video nativo optimizado con autoplay y bucle continuo
+        _st.markdown('<div class="video-background">', unsafe_allow_html=True)
+        _st.video(video_file, autoplay=True, muted=True, loop=True)
+        _st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Síntesis de voz del navegador al responder
         texto_a_decir = _st.session_state.ultima_respuesta
         lang_voz = info_tutor["voice_lang"]
-
-        video_html = f"""
-        <div class="fullscreen-video-container">
-            <video id="avatarVideo" src="{video_file}" playsinline muted></video>
-        </div>
-        <script>
-            const video = document.getElementById('avatarVideo');
-            const textToSpeak = {repr(texto_a_decir)};
-            const voiceLang = "{lang_voz}";
-
-            function playAvatarSpeech() {{
-                if (!textToSpeak) return;
-                const synth = window.speechSynthesis;
-                const utterThis = new SpeechSynthesisUtterance(textToSpeak);
-                utterThis.lang = voiceLang;
-                
-                utterThis.onstart = function() {{
-                    video.play();
-                }};
-                
-                utterThis.onend = function() {{
-                    video.pause();
-                }};
-                
-                utterThis.onerror = function() {{
-                    video.pause();
-                }};
-
-                synth.speak(utterThis);
-            }}
-
-            window.onload = playAvatarSpeech();
-        </script>
-        """
-        _st.markdown(video_html, unsafe_allow_html=True)
+        if texto_a_decir:
+            voice_script = f"""
+            <script>
+                const textToSpeak = {repr(texto_a_decir)};
+                const voiceLang = "{lang_voz}";
+                if (textToSpeak && 'speechSynthesis' in window) {{
+                    const synth = window.speechSynthesis;
+                    const utterThis = new SpeechSynthesisUtterance(textToSpeak);
+                    utterThis.lang = voiceLang;
+                    synth.speak(utterThis);
+                }}
+            </script>
+            """
+            _st.markdown(voice_script, unsafe_allow_html=True)
     else:
         _st.error(f"⚠️ No se encontró el archivo de video '{video_file}' en el repositorio de GitHub.")
 
@@ -256,7 +247,7 @@ else:
             _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
     _st.markdown('</div>', unsafe_allow_html=True)
 
-    # Barra de mensajes inferior unificada
+    # Barra de mensajes inferior unificada y fija
     with _st.form(key="gemini_input_form", clear_on_submit=True):
         col_plus, col_input, col_send = _st.columns([1, 7, 1])
         
@@ -267,12 +258,12 @@ else:
         with col_send:
             btn_enviar = _st.form_submit_button("➤")
 
-    # Lógica de respuesta con Gemini
+    # Lógica de respuesta con Gemini (`gemini-pro`)
     if btn_enviar and prompt_usuario:
         historial_actual.append({"role": "user", "content": prompt_usuario})
         
         if not api_key_val:
-            respuesta_ia = "⚠️ Error: Por favor ingresa tu API Key de Gemini en el menú de herramientas."
+            respuesta_ia = "⚠️ Error: Por favor ingresa tu API Key de Gemini en el menú de herramientas (☰)."
         else:
             with _st.spinner("Pensando respuesta..."):
                 try:
@@ -290,4 +281,4 @@ else:
         _st.rerun()
 
     if btn_adjuntar:
-        _st.info("💡 Tip: Utiliza la sección 'Adjuntar Documento' en el menú lateral.")
+        _st.info("💡 Tip: Utiliza la sección 'Adjuntar Documento' en el menú lateral (☰).")
