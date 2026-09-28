@@ -1,6 +1,7 @@
 import streamlit as _st
 import google.generativeai as genai
 import os
+import json
 
 # Configuración de la página
 _st.set_page_config(
@@ -9,7 +10,7 @@ _st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Inicializar la API Key en session_state para que no la pida constantemente
+# Inicializar la API Key en session_state para evitar que la pida constantemente
 if "api_key" not in _st.session_state:
     _st.session_state.api_key = ""
     try:
@@ -21,7 +22,7 @@ if "api_key" not in _st.session_state:
 if _st.session_state.api_key:
     genai.configure(api_key=_st.session_state.api_key)
 
-# Estilos CSS limpios y modernos
+# Estilos CSS profesionales y optimizados para móviles y PC
 _st.markdown("""
     <style>
     footer {visibility: hidden !important;}
@@ -37,24 +38,13 @@ _st.markdown("""
         color: #ffffff;
     }
     
-    /* Contenedor estético para el avatar */
-    .avatar-container {
-        width: 100%;
-        max-height: 40vh;
-        overflow: hidden;
+    /* Contenedor estético y seguro para el avatar */
+    .avatar-box {
         border-radius: 14px;
-        margin-bottom: 12px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: #000000;
+        overflow: hidden;
         border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    
-    .avatar-container video {
-        width: 100%;
-        height: auto;
-        object-fit: cover;
+        margin-bottom: 12px;
+        background-color: #000000;
     }
     
     /* Caja de historial de chat */
@@ -198,59 +188,33 @@ else:
     texto_a_decir = _st.session_state.ultima_respuesta
     lang_voz = info_tutor["voice_lang"]
 
-    # Reproducción del video sincronizada exactamente con el tiempo de locución del mensaje
+    # Renderizado seguro del avatar mediante componentes nativos de Streamlit
     if os.path.exists(video_file):
-        video_html = f"""
-        <div class="avatar-container">
-            <video id="tutorVideo" src="{video_file}" playsinline muted></video>
-        </div>
+        _st.markdown('<div class="avatar-box">', unsafe_allow_html=True)
+        _st.video(video_file, autoplay=True, muted=True, loop=True)
+        _st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Script seguro utilizando json.dumps para evitar errores de sintaxis en la voz
+        texto_json = json.dumps(texto_a_decir)
+        sync_script = f"""
         <script>
-            const videoElem = document.getElementById('tutorVideo');
-            const messageText = {repr(texto_a_decir)};
+            const messageText = {texto_json};
             const voiceLanguage = "{lang_voz}";
 
-            function playAvatarSync() {{
-                if (!messageText) return;
-                
-                // Reproducir voz sintética del navegador si está disponible
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(messageText);
-                    utterance.lang = voiceLanguage;
-                    
-                    utterance.onstart = function() {{
-                        videoElem.currentTime = 0;
-                        videoElem.play();
-                    }};
-                    
-                    utterance.onend = function() {{
-                        videoElem.pause();
-                        videoElem.currentTime = 0;
-                    }};
-                    
-                    utterance.onerror = function() {{
-                        videoElem.pause();
-                    }};
-                    
-                    window.speechSynthesis.speak(utterance);
-                }} else {{
-                    // Fallback por tiempo estimado basado en la longitud del texto (aprox. 15 caracteres por segundo)
-                    const estimatedTimeMs = Math.min(Math.max(messageText.length * 70, 2000), 10000);
-                    videoElem.currentTime = 0;
-                    videoElem.play();
-                    setTimeout(() => {{
-                        videoElem.pause();
-                        videoElem.currentTime = 0;
-                    }}, estimatedTimeMs);
-                }}
+            function speakMessage() {{
+                if (!messageText || !('speechSynthesis' in window)) return;
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(messageText);
+                utterance.lang = voiceLanguage;
+                window.speechSynthesis.speak(utterance);
             }}
 
-            window.addEventListener('load', playAvatarSync);
+            window.addEventListener('load', speakMessage);
         </script>
         """
-        _st.markdown(video_html, unsafe_allow_html=True)
+        _st.markdown(sync_script, unsafe_allow_html=True)
     else:
-        _st.warning(f"⚠️ El archivo de video '{video_file}' no se encuentra en el repositorio de GitHub.")
+        _st.error(f"❌ Archivo de video '{video_file}' no encontrado en el repositorio. Súbelo a la raíz de tu proyecto en GitHub.")
 
     # Historial de conversación visible
     _st.markdown('<div class="chat-history-box">', unsafe_allow_html=True)
@@ -263,18 +227,16 @@ else:
             _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
     _st.markdown('</div>', unsafe_allow_html=True)
 
-    # Formulario unificado de entrada en la parte inferior
+    # Formulario unificado y estable con un solo botón de envío
     with _st.form(key="gemini_input_form", clear_on_submit=True):
-        col_plus, col_input, col_send = _st.columns([1, 7, 1])
+        col_input, col_send = _st.columns([8, 1])
         
-        with col_plus:
-            btn_adjuntar = _st.form_submit_button("➕")
         with col_input:
             prompt_usuario = _st.text_input("Mensaje", label_visibility="collapsed", placeholder="Type your message in English...")
         with col_send:
             btn_enviar = _st.form_submit_button("➤")
 
-    # Lógica con Gemini usando el modelo estable `gemini-1.5-flash`
+    # Lógica con Gemini usando el modelo estable `models/gemini-1.5-flash`
     if btn_enviar and prompt_usuario:
         historial_actual.append({"role": "user", "content": prompt_usuario})
         
@@ -283,7 +245,7 @@ else:
         else:
             with _st.spinner("Thinking..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('models/gemini-1.5-flash')
                     contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
                     prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
                     
@@ -295,6 +257,3 @@ else:
         historial_actual.append({"role": "assistant", "content": respuesta_ia})
         _st.session_state.ultima_respuesta = respuesta_ia
         _st.rerun()
-
-    if btn_adjuntar:
-        _st.info("💡 Tip: Use the 'Attach Document' section in the sidebar menu (☰).")
