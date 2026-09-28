@@ -4,7 +4,7 @@ import os
 
 # Configuración de página
 _st.set_page_config(
-    page_title="CrownTutors AI - Videollamada",
+    page_title="CrownTutors AI",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -20,10 +20,13 @@ except Exception:
 if api_key_val:
     genai.configure(api_key=api_key_val)
 
-# Estilos CSS limpios y modernos
+# Estilos CSS avanzados para Full Screen real y barra de chat integrada
 _st.markdown("""
     <style>
-    footer {visibility: hidden;}
+    /* Ocultar elementos predeterminados de Streamlit para efecto Full Screen */
+    header {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+    .stDeployButton {display:none !important;}
     
     .block-container {
         padding-top: 0rem !important;
@@ -31,6 +34,8 @@ _st.markdown("""
         padding-left: 0rem !important;
         padding-right: 0rem !important;
         max-width: 100% !important;
+        height: 100vh !important;
+        overflow: hidden !important;
     }
     
     .stApp {
@@ -38,15 +43,19 @@ _st.markdown("""
         color: #ffffff;
     }
     
+    /* Contenedor del video a pantalla completa */
     .fullscreen-video-container {
-        position: relative;
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 100vw;
-        height: 75vh;
+        height: 100vh;
+        z-index: 0;
         overflow: hidden;
+        background: #000;
         display: flex;
         justify-content: center;
         align-items: center;
-        background: #000;
     }
     
     .fullscreen-video-container video {
@@ -55,17 +64,19 @@ _st.markdown("""
         object-fit: cover;
     }
     
+    /* Capa de chat flotante translúcida */
     .chat-overlay {
         position: absolute;
-        bottom: 10px;
-        left: 10px;
-        right: 10px;
+        bottom: 85px;
+        left: 12px;
+        right: 12px;
         background: rgba(0, 0, 0, 0.75);
         backdrop-filter: blur(10px);
         border-radius: 14px;
         padding: 12px 16px;
-        max-height: 200px;
+        max-height: 45vh;
         overflow-y: auto;
+        z-index: 10;
     }
     
     .chat-message-user {
@@ -81,13 +92,25 @@ _st.markdown("""
     }
     
     .welcome-screen {
+        position: relative;
+        z-index: 10;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 80vh;
+        height: 90vh;
         text-align: center;
         padding: 20px;
+    }
+    
+    /* Estilo para fijar la barra de entrada flotante abajo */
+    .stChatFloatingInputContainer, div[data-testid="stForm"] {
+        position: fixed !important;
+        bottom: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        z-index: 999 !important;
+        background: transparent !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -200,7 +223,7 @@ else:
     texto_a_decir = _st.session_state.ultima_respuesta
     lang_voz = info_tutor["voice_lang"]
 
-    # Inyectar script de voz y control de video mediante HTML seguro
+    # Reproductor de video de fondo y script de voz nativa sincronizada
     video_html = f"""
     <div class="fullscreen-video-container">
         <video id="avatarVideo" src="{video_file}" playsinline muted></video>
@@ -236,7 +259,7 @@ else:
     """
     _st.markdown(video_html, unsafe_allow_html=True)
 
-    # Capa de chat flotante transparente
+    # Capa de historial de chat flotante
     _st.markdown('<div class="chat-overlay">', unsafe_allow_html=True)
     for mensaje in historial_actual:
         rol = mensaje["role"]
@@ -247,18 +270,18 @@ else:
             _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
     _st.markdown('</div>', unsafe_allow_html=True)
 
-    # Barra de mensajes inferior estilo Gemini
+    # Barra de mensajes inferior unificada (con botón + y enviar adentro)
     with _st.form(key="gemini_input_form", clear_on_submit=True):
-        col_plus, col_input, col_send = _st.columns([1, 8, 1])
+        col_plus, col_input, col_send = _st.columns([1, 7, 1])
         
         with col_plus:
             btn_adjuntar = _st.form_submit_button("➕")
         with col_input:
-            prompt_usuario = _st.text_input("Mensaje", label_visibility="collapsed", placeholder="Escribe tu mensaje aquí...")
+            prompt_usuario = _st.text_input("Mensaje", label_visibility="collapsed", placeholder="Escribe tu mensaje...")
         with col_send:
             btn_enviar = _st.form_submit_button("➤")
 
-    # Lógica de respuesta con modelo estable de Gemini (`gemini-1.5-flash`)
+    # Lógica de respuesta usando el modelo estable de Gemini (`gemini-pro`)
     if btn_enviar and prompt_usuario:
         historial_actual.append({"role": "user", "content": prompt_usuario})
         
@@ -267,7 +290,8 @@ else:
         else:
             with _st.spinner("Pensando respuesta..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    # gemini-pro es el modelo estándar universalmente compatible para texto
+                    model = genai.GenerativeModel('gemini-pro')
                     contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
                     prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
                     
@@ -281,4 +305,4 @@ else:
         _st.rerun()
 
     if btn_adjuntar:
-        _st.info("💡 Tip: Utiliza la sección 'Adjuntar Documento' en el menú lateral (☰) para cargar tus archivos.")
+        _st.info("💡 Tip: Utiliza la sección 'Adjuntar Documento' en el menú lateral (☰).")
