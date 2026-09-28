@@ -2,14 +2,14 @@ import streamlit as _st
 import google.generativeai as genai
 import os
 
-# Configuración de página
+# Configuración de la página
 _st.set_page_config(
     page_title="CrownTutors AI",
     layout="centered",
     initial_sidebar_state="auto"
 )
 
-# Inicializar la API Key en session_state para evitar que la pida constantemente
+# Inicializar la API Key en session_state para que no la pida constantemente
 if "api_key" not in _st.session_state:
     _st.session_state.api_key = ""
     try:
@@ -21,7 +21,7 @@ if "api_key" not in _st.session_state:
 if _st.session_state.api_key:
     genai.configure(api_key=_st.session_state.api_key)
 
-# Estilos CSS modernos, elegantes y optimizados para móviles (Pixel / PC)
+# Estilos CSS limpios y modernos
 _st.markdown("""
     <style>
     footer {visibility: hidden !important;}
@@ -37,33 +37,34 @@ _st.markdown("""
         color: #ffffff;
     }
     
-    /* Contenedor del video del avatar */
-    .video-container {
+    /* Contenedor estético para el avatar */
+    .avatar-container {
         width: 100%;
-        max-height: 45vh;
+        max-height: 40vh;
         overflow: hidden;
         border-radius: 14px;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
         display: flex;
         justify-content: center;
         align-items: center;
-        background: #000;
+        background-color: #000000;
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
     
-    .video-container video {
+    .avatar-container video {
         width: 100%;
         height: auto;
         object-fit: cover;
     }
     
-    /* Caja de historial de chat translúcida */
+    /* Caja de historial de chat */
     .chat-history-box {
-        background: rgba(20, 20, 20, 0.85);
+        background: rgba(20, 20, 20, 0.9);
         border-radius: 12px;
         padding: 12px;
         max-height: 25vh;
         overflow-y: auto;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
     
@@ -84,27 +85,14 @@ _st.markdown("""
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 70vh;
+        height: 65vh;
         text-align: center;
         padding: 20px;
-    }
-    
-    /* Contenedor flotante inferior para unificar la barra de mensajes */
-    .fixed-bottom-chat {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(10, 10, 10, 0.95);
-        backdrop-filter: blur(10px);
-        padding: 10px 15px;
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
-        z-index: 999;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Definición de tutores (configurados estrictamente para hablar en Inglés)
+# Definición de tutores (configurados estrictamente en Inglés)
 TUTORES = {
     "Sofía": {
         "video": "sofia.mp4", 
@@ -122,7 +110,7 @@ TUTORES = {
     }
 }
 
-# Inicializar estados de sesión
+# Inicialización de estados de sesión
 if "chats_activos" not in _st.session_state:
     _st.session_state.chats_activos = {}
 
@@ -191,14 +179,14 @@ with _st.sidebar:
         _st.session_state.texto_documento = contenido[:4000]
         _st.success(f"¡'{archivo_subido.name}' integrado al contexto!")
 
-# Pantalla principal condicional
+# Pantalla de bienvenida o chat activo
 if _st.session_state.chat_actual is None or _st.session_state.tutor_activo is None:
     _st.markdown("""
         <div class="welcome-screen">
             <h2>👋 ¡Bienvenido a CrownTutors AI!</h2>
             <p style="color: #a0a8b4; font-size: 16px; margin-top: 10px;">
                 Toca el botón de menú <b>(☰)</b> en la esquina superior izquierda 
-                para configurar tu API Key, seleccionar un tutor e iniciar tu sesión en inglés.
+                para configurar tu API Key, seleccionar un tutor e iniciar tu práctica en inglés.
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -210,49 +198,61 @@ else:
     texto_a_decir = _st.session_state.ultima_respuesta
     lang_voz = info_tutor["voice_lang"]
 
-    # Reproductor de video inteligente sincronizado con la voz (Evita bucles infinitos)
+    # Reproducción del video sincronizada exactamente con el tiempo de locución del mensaje
     if os.path.exists(video_file):
-        video_sync_html = f"""
-        <div class="video-container">
-            <video id="avatarVideo" src="{video_file}" playsinline muted></video>
+        video_html = f"""
+        <div class="avatar-container">
+            <video id="tutorVideo" src="{video_file}" playsinline muted></video>
         </div>
         <script>
-            const video = document.getElementById('avatarVideo');
-            const textToSpeak = {repr(texto_a_decir)};
-            const voiceLang = "{lang_voz}";
+            const videoElem = document.getElementById('tutorVideo');
+            const messageText = {repr(texto_a_decir)};
+            const voiceLanguage = "{lang_voz}";
 
-            function speakAndAnimate() {{
-                if (!textToSpeak || !('speechSynthesis' in window)) return;
-                const synth = window.speechSynthesis;
-                synth.cancel(); // Detener cualquier audio previo
+            function playAvatarSync() {{
+                if (!messageText) return;
                 
-                const utterThis = new SpeechSynthesisUtterance(textToSpeak);
-                utterThis.lang = voiceLang;
-                
-                utterThis.onstart = function() {{
-                    video.play();
-                }};
-                
-                utterThis.onend = function() {{
-                    video.pause();
-                    video.currentTime = 0;
-                }};
-                
-                utterThis.onerror = function() {{
-                    video.pause();
-                }};
-
-                synth.speak(utterThis);
+                // Reproducir voz sintética del navegador si está disponible
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(messageText);
+                    utterance.lang = voiceLanguage;
+                    
+                    utterance.onstart = function() {{
+                        videoElem.currentTime = 0;
+                        videoElem.play();
+                    }};
+                    
+                    utterance.onend = function() {{
+                        videoElem.pause();
+                        videoElem.currentTime = 0;
+                    }};
+                    
+                    utterance.onerror = function() {{
+                        videoElem.pause();
+                    }};
+                    
+                    window.speechSynthesis.speak(utterance);
+                }} else {{
+                    // Fallback por tiempo estimado basado en la longitud del texto (aprox. 15 caracteres por segundo)
+                    const estimatedTimeMs = Math.min(Math.max(messageText.length * 70, 2000), 10000);
+                    videoElem.currentTime = 0;
+                    videoElem.play();
+                    setTimeout(() => {{
+                        videoElem.pause();
+                        videoElem.currentTime = 0;
+                    }}, estimatedTimeMs);
+                }}
             }}
 
-            window.addEventListener('load', speakAndAnimate);
+            window.addEventListener('load', playAvatarSync);
         </script>
         """
-        _st.markdown(video_sync_html, unsafe_allow_html=True)
+        _st.markdown(video_html, unsafe_allow_html=True)
     else:
-        _st.warning(f"⚠️ El archivo '{video_file}' no se encuentra en el repositorio de GitHub.")
+        _st.warning(f"⚠️ El archivo de video '{video_file}' no se encuentra en el repositorio de GitHub.")
 
-    # Historial de chat visible
+    # Historial de conversación visible
     _st.markdown('<div class="chat-history-box">', unsafe_allow_html=True)
     for mensaje in historial_actual:
         rol = mensaje["role"]
@@ -263,7 +263,7 @@ else:
             _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
     _st.markdown('</div>', unsafe_allow_html=True)
 
-    # Barra de mensajes inferior unificada (con botón +, input y enviar ordenados)
+    # Formulario unificado de entrada en la parte inferior
     with _st.form(key="gemini_input_form", clear_on_submit=True):
         col_plus, col_input, col_send = _st.columns([1, 7, 1])
         
@@ -274,7 +274,7 @@ else:
         with col_send:
             btn_enviar = _st.form_submit_button("➤")
 
-    # Lógica de respuesta usando Gemini (`gemini-1.5-flash`)
+    # Lógica con Gemini usando el modelo estable `gemini-1.5-flash`
     if btn_enviar and prompt_usuario:
         historial_actual.append({"role": "user", "content": prompt_usuario})
         
@@ -297,4 +297,4 @@ else:
         _st.rerun()
 
     if btn_adjuntar:
-        _st.info("💡 Tip: Use the 'Attach Document' section in the sidebar menu (☰) to upload files.")
+        _st.info("💡 Tip: Use the 'Attach Document' section in the sidebar menu (☰).")
