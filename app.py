@@ -200,7 +200,7 @@ else:
     texto_a_decir = _st.session_state.ultima_respuesta
     lang_voz = info_tutor["voice_lang"]
 
-    # Reproductor de video con sincronización de voz y pausa/reproducción
+    # Inyectar script de voz y control de video mediante HTML seguro
     video_html = f"""
     <div class="fullscreen-video-container">
         <video id="avatarVideo" src="{video_file}" playsinline muted></video>
@@ -229,7 +229,7 @@ else:
             }};
 
             synth.speak(utterThis);
-        }
+        }}
 
         window.onload = playAvatarSpeech();
     </script>
@@ -267,7 +267,6 @@ else:
         else:
             with _st.spinner("Pensando respuesta..."):
                 try:
-                    # Usamos gemini-1.5-flash que es el modelo estándar y compatible en la nube
                     model = genai.GenerativeModel('gemini-1.5-flash')
                     contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
                     prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
