@@ -2,143 +2,287 @@ import streamlit as _st
 import google.generativeai as genai
 import os
 
-# Configuración de página optimizada para vista móvil
+# Configuración de página
 _st.set_page_config(
-    page_title="Polyglot AI Video Tutors",
+    page_title="CrownTutors AI - Videollamada",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# Configurar la API de Gemini (Busca en los secretos de Streamlit Cloud)
+# Configurar la API de Gemini
 try:
-    genai.configure(api_key=_st.secrets["GEMINI_API_KEY"])
+    api_key_val = _st.secrets.get("GEMINI_API_KEY", "")
+    if api_key_val:
+        genai.configure(api_key=api_key_val)
 except Exception:
     pass
 
-# Estilos CSS limpios y profesionales
+# Estilos CSS avanzados y script de voz/video integrado
 _st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    
+    .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        max-width: 100% !important;
+    }
     
     .stApp {
-        background-color: #0b0e14;
+        background-color: #000000;
         color: #ffffff;
     }
     
-    .mobile-container {
-        max-width: 420px;
-        margin: auto;
-        background: #161b22;
-        border-radius: 24px;
-        border: 2px solid #30363d;
-        padding: 15px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    .fullscreen-video-container {
+        position: relative;
+        width: 100vw;
+        height: 75vh;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #000;
+    }
+    
+    .fullscreen-video-container video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .chat-overlay {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(10px);
+        border-radius: 14px;
+        padding: 12px 16px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .chat-message-user {
+        color: #8ab4f8;
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+    
+    .chat-message-assistant {
+        color: #ffffff;
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+    
+    .welcome-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 80vh;
+        text-align: center;
+        padding: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Diccionario de tutores (Apunta directamente a los archivos en la raíz del repositorio)
+# Definición de tutores con su configuración de voz para el navegador
 TUTORES = {
     "Sofía": {
         "video": "sofia.mp4", 
         "estilo": "Casual y Conversacional", 
         "idioma": "Inglés (British English)",
-        "prompt_base": "You are Sofia, an expert and friendly British English tutor. Respond naturally in British English, correcting the user's phrasing gently if needed."
+        "voice_lang": "en-GB",
+        "prompt_base": "You are Sofia, an expert and friendly British English tutor with a refined Received Pronunciation (RP) accent. Correct the user constructively and keep the conversation flowing naturally."
     },
     "Sebastián": {
         "video": "sebastian.mp4", 
         "estilo": "Corporativo y Negocios", 
         "idioma": "Inglés (Business)",
-        "prompt_base": "You are Sebastián, a professional business English corporate coach. Focus on professional vocabulary and formal phrasing."
+        "voice_lang": "en-US",
+        "prompt_base": "You are Sebastián, a professional corporate business English coach. Focus on professional vocabulary and business communication."
     }
 }
 
-# Inicializar estado de la sesión
-if "chat_historial" not in _st.session_state:
-    _st.session_state.chat_historial = [
-        {"role": "assistant", "content": "Hello! I'm Sofia. Let's practice your British English!"}
-    ]
+# Inicializar estados de sesión
+if "chats_activos" not in _st.session_state:
+    _st.session_state.chats_activos = {}
 
-if "tutor_actual" not in _st.session_state:
-    _st.session_state.tutor_actual = "Sofía"
+if "chat_actual" not in _st.session_state:
+    _st.session_state.chat_actual = None
+
+if "tutor_activo" not in _st.session_state:
+    _st.session_state.tutor_activo = None
 
 if "texto_documento" not in _st.session_state:
     _st.session_state.texto_documento = ""
 
-# Menú lateral para configuración
+if "ultima_respuesta" not in _st.session_state:
+    _st.session_state.ultima_respuesta = ""
+
+# Menú lateral de herramientas (☰)
 with _st.sidebar:
-    _st.title("🛠️ Configuración")
+    _st.title("🛠️ Menú de Herramientas")
     
-    api_key_input = _st.text_input("Gemini API Key (Opcional):", type="password")
+    api_key_input = _st.text_input("Gemini API Key:", type="password")
     if api_key_input:
         genai.configure(api_key=api_key_input)
         
-    _st.subheader("Seleccionar Tutor")
-    tutor_seleccionado = _st.selectbox(
-        "Tutor activo:", 
-        list(TUTORES.keys()), 
-        index=list(TUTORES.keys()).index(_st.session_state.tutor_actual)
-    )
-    
-    if tutor_seleccionado != _st.session_state.tutor_actual:
-        _st.session_state.tutor_actual = tutor_seleccionado
-        info_nuevo = TUTORES[tutor_seleccionado]
-        _st.session_state.chat_historial = [
-            {"role": "assistant", "content": f"Hello! I'm {tutor_seleccionado}, ready to help you practice."}
-        ]
-        _st.rerun()
-        
     _st.markdown("---")
-    _st.subheader("📎 Contexto por Documento")
+    _st.subheader("💬 Chats Activos")
+    
+    lista_chats = list(_st.session_state.chats_activos.keys())
+    if lista_chats:
+        chat_seleccionado = _st.selectbox(
+            "Selecciona tu chat:", 
+            lista_chats,
+            index=lista_chats.index(_st.session_state.chat_actual) if _st.session_state.chat_actual in lista_chats else 0
+        )
+        if chat_seleccionado != _st.session_state.chat_actual:
+            _st.session_state.chat_actual = chat_seleccionado
+            if "Sofía" in chat_seleccionado:
+                _st.session_state.tutor_activo = "Sofía"
+            elif "Sebastián" in chat_seleccionado:
+                _st.session_state.tutor_activo = "Sebastián"
+            _st.rerun()
+    else:
+        _st.info("No hay chats iniciados. Crea uno abajo 👇")
+
+    _st.markdown("---")
+    _st.subheader("➕ Iniciar Nueva Sesión")
+    nuevo_tutor = _st.selectbox("Seleccionar Tutor:", list(TUTORES.keys()))
+    
+    if _st.button("Crear y Activar Chat"):
+        clave_chat = f"{nuevo_tutor} - Sesión Principal"
+        saludo_inicial = f"Hello! I'm {nuevo_tutor}. Let's get started with your practice!"
+        _st.session_state.chats_activos[clave_chat] = [
+            {"role": "assistant", "content": saludo_inicial}
+        ]
+        _st.session_state.chat_actual = clave_chat
+        _st.session_state.tutor_activo = nuevo_tutor
+        _st.session_state.ultima_respuesta = saludo_inicial
+        _st.rerun()
+
+    _st.markdown("---")
+    _st.subheader("📎 Adjuntar Documento")
     archivo_subido = _st.file_uploader("Sube un archivo TXT o PDF", type=["txt", "pdf"])
     if archivo_subido:
         contenido = archivo_subido.read().decode("utf-8", errors="ignore")
         _st.session_state.texto_documento = contenido[:4000]
-        _st.success(f"¡'{archivo_subido.name}' cargado con éxito!")
+        _st.success(f"¡'{archivo_subido.name}' integrado al contexto!")
 
-info_tutor = TUTORES[_st.session_state.tutor_actual]
-
-# Contenedor principal
-_st.markdown('<div class="mobile-container">', unsafe_allow_html=True)
-
-_st.markdown(f"### 🎙️ Tutor: {_st.session_state.tutor_actual}")
-
-# Reproductor de video robusto (busca el archivo en la raíz)
-video_file = info_tutor["video"]
-if os.path.exists(video_file):
-    _st.video(video_file, format="video/mp4", autoplay=True, loop=True, muted=True)
+# Pantalla principal condicional
+if _st.session_state.chat_actual is None or _st.session_state.tutor_activo is None:
+    _st.markdown("""
+        <div class="welcome-screen">
+            <h2>👋 ¡Bienvenido a CrownTutors AI!</h2>
+            <p style="color: #a0a8b4; font-size: 16px; margin-top: 10px;">
+                Para comenzar, abre el menú de herramientas <b>(☰)</b> en la esquina superior, 
+                selecciona un tutor e inicia tu sesión de práctica.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 else:
-    _st.warning(f"⚠️ No se encontró el archivo '{video_file}' en el repositorio. Súbelo a la raíz de GitHub.")
+    info_tutor = TUTORES[_st.session_state.tutor_activo]
+    historial_actual = _st.session_state.chats_activos[_st.session_state.chat_actual]
 
-_st.markdown("---")
+    # Contenedor del video con JavaScript para sincronizar pausa/reproducción y voz nativa
+    video_file = info_tutor["video"]
+    if not os.path.exists(video_file):
+        video_file = "sofia.mp4"
 
-# Historial de chat organizado
-contenedor_chat = _st.container(height=280)
-with contenedor_chat:
-    for mensaje in _st.session_state.chat_historial:
-        with _st.chat_message(mensaje["role"]):
-            _st.write(mensaje["content"])
+    # HTML + JS para controlar el video y la voz del navegador en tiempo real
+    texto_a_decir = _st.session_state.ultima_respuesta
+    lang_voz = info_tutor["voice_lang"]
 
-_st.markdown('</div>', unsafe_allow_html=True)
+    video_html = f"""
+    <div class="fullscreen-video-container">
+        <video id="avatarVideo" src="{video_file}" playsinline muted></video>
+    </div>
+    <script>
+        const video = document.getElementById('avatarVideo');
+        const textToSpeak = {repr(texto_a_decir)};
+        const voiceLang = "{lang_voz}";
 
-# Entrada de chat conectada a Gemini
-prompt_usuario = _st.chat_input("Escribe tu mensaje...")
-
-if prompt_usuario:
-    _st.session_state.chat_historial.append({"role": "user", "content": prompt_usuario})
-    
-    with _st.spinner("Gemini está pensando..."):
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
-            prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
+        function playAvatarSpeech() {{
+            if (!textToSpeak) return;
             
-            response = model.generate_content(prompt_completo)
-            respuesta_ia = response.text
-        except Exception as e:
-            respuesta_ia = f"⚠️ Error al conectar con Gemini. Configura tu API Key en los secretos de Streamlit. Detalle: {e}"
+            // Sintetizador de voz nativo del navegador
+            const synth = window.speechSynthesis;
+            const utterThis = new SpeechSynthesisUtterance(textToSpeak);
+            utterThis.lang = voiceLang;
             
-    _st.session_state.chat_historial.append({"role": "assistant", "content": respuesta_ia})
-    _st.rerun()
+            // Cuando empiece a hablar, reproduce el video (gesticulando)
+            utterThis.onstart = function() {{
+                video.play();
+            }};
+            
+            // Cuando termine de hablar, pausa el video
+            utterThis.onend = function() {{
+                video.pause();
+            }};
+            
+            utterThis.onerror = function() {{
+                video.pause();
+            }};
+
+            synth.speak(utterThis);
+        }}
+
+        // Ejecutar al cargar la respuesta
+        window.onload = playAvatarSpeech();
+    </script>
+    """
+    _st.markdown(video_html, unsafe_allow_html=True)
+
+    # Historial de mensajes flotante sin cajas
+    _st.markdown('<div class="chat-overlay">', unsafe_allow_html=True)
+    for mensaje in historial_actual:
+        rol = mensaje["role"]
+        texto = mensaje["content"]
+        if rol == "user":
+            _st.markdown(f'<div class="chat-message-user"><b>Tú:</b> {texto}</div>', unsafe_allow_html=True)
+        else:
+            _st.markdown(f'<div class="chat-message-assistant"><b>{_st.session_state.tutor_activo}:</b> {texto}</div>', unsafe_allow_html=True)
+    _st.markdown('</div>', unsafe_allow_html=True)
+
+    # Barra de escritura inferior estilo Gemini
+    with _st.form(key="gemini_input_form", clear_on_submit=True):
+        col_plus, col_input, col_send = _st.columns([1, 8, 1])
+        
+        with col_plus:
+            btn_adjuntar = _st.form_submit_button("➕")
+        with col_input:
+            prompt_usuario = _st.text_input("Mensaje", label_visibility="collapsed", placeholder="Escribe tu mensaje aquí...")
+        with col_send:
+            btn_enviar = _st.form_submit_button("➤")
+
+    # Procesar lógica de Gemini y actualizar la última respuesta para que hable y mueva la boca
+    if btn_enviar and prompt_usuario:
+        historial_actual.append({"role": "user", "content": prompt_usuario})
+        
+        with _st.spinner("Pensando respuesta..."):
+            try:
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                contexto_doc = f"\n\nContext from uploaded document:\n{_st.session_state.texto_documento}" if _st.session_state.texto_documento else ""
+                prompt_completo = f"{info_tutor['prompt_base']}{contexto_doc}\n\nUser message: {prompt_usuario}"
+                
+                response = model.generate_content(prompt_completo)
+                respuesta_ia = response.text
+            except Exception as e:
+                try:
+                    model = genai.GenerativeModel('gemini-2.0-flash')
+                    response = model.generate_content(prompt_completo)
+                    respuesta_ia = response.text
+                except Exception as e2:
+                    respuesta_ia = f"⚠️ Error de conexión con Gemini. Detalle: {e2}"
+                
+        historial_actual.append({"role": "assistant", "content": respuesta_ia})
+        _st.session_state.ultima_respuesta = respuesta_ia
+        _st.rerun()
+
+    if btn_adjuntar:
+        _st.info("💡 Tip: Utiliza la sección 'Adjuntar Documento' en el menú lateral (☰) para cargar tus archivos.")
